@@ -5,6 +5,7 @@ import Tabla from '../../components/Tabla/Tabla';
 import Add from '../../components/Add/Add';
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
+import apiUrl from '../../../config/config'; // Importa la URL de la API desde config.js
 
 
 const MySwal = withReactContent(Swal);
@@ -14,53 +15,47 @@ function GestionCobertura() {
 // Alertas para crear poligono 
   const [poligono, setPoligono] = useState('');   
   const crearPoligono = (event) => {
-    event.preventDefault(); 
-      //Alerta con preguntas de confirmacion para crear poligonos
-    const swalWithBootstrapButtons = Swal.mixin({
-        customClass: {
-          confirmButton: 'btn btn-success',
-          cancelButton: 'btn btn-danger'
-          },
-          buttonsStyling: false
-          })
-          if (poligono.trim() !== '') {
-            swalWithBootstrapButtons.fire({
-              text: "Estas seguro de que deseas crear el poligono?",
-              icon: 'question',
-              showCancelButton: true,
-              confirmButtonText: 'Si',
-              cancelButtonText: 'No',
-                    
-              }).then((result) => {
-                    if (result.isConfirmed) {
-                      //añade filas a la tabla de poligono
-                      setFilasPoligono([...filasPoligono, { id: filasPoligono.length + 1, poligono }]);
-                      swalWithBootstrapButtons.fire(
-                      'Se ha agregado con exito', 
-                      'el poligono',
-                      'success'
-                     )
-                    } else if (
-                     
-                      result.dismiss === Swal.DismissReason.cancel
-                    ) {
-                      swalWithBootstrapButtons.fire(
-                      'Vaya! Hubo un error',
-                      'en tu solicitud de crear el poligono, vuelve a intentar mas tarde',
-                      'error'
-                     )
-                    }
-                  })
-             
-              } else {
+    event.preventDefault();
+    if (poligono.trim() !== '') {
+      fetch(`${apiUrl}/poligonos/poligonos.js`, { // Reemplaza 'ruta-de-tu-endpoint' con la ruta real de tu endpoint
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nombre_poligono: poligono,
+          // Otros datos que deseas enviar al servidor
+        }),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          // Procesa la respuesta del servidor aquí
+          console.log('Respuesta del servidor:', data);
+          // Puedes mostrar una alerta de éxito aquí
+          MySwal.fire(
+            'Poligono Creado Exitosamente',
+            'El poligono se ha creado con éxito.',
+            'success'
+          );
+        })
+        .catch((error) => {
+          console.error('Error:', error);
+          // Puedes mostrar una alerta de error aquí
+          MySwal.fire(
+            'Error al Crear Poligono',
+            'Hubo un error al crear el poligono. Por favor, intenta nuevamente.',
+            'error'
+          );
+        });
+    } else {
       // Mostrar mensaje de error si los campos están vacíos
-              MySwal.fire({
-                  title: <strong>Error</strong>,
-                  html: <i>Por favor, complete el campo</i>,
-                  icon: 'error'
-               });
-              }
-            };
+      MySwal.fire({
+        title: <strong>Error</strong>,
+        html: <i>Por favor, complete el campo</i>,
+        icon: 'error',
+      });
+    }
+  }
 
       //Alertas para latitud y longitud
           const [latitud, setLatitud ] = useState('');   

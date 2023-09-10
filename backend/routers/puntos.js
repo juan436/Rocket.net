@@ -10,82 +10,71 @@ const routerPuntos = express.Router();
 routerPuntos.use(express.json());
 routerPuntos.use(cors());
 
+//create
 routerPuntos.post('/', validaPuntos, async (req, res) => {
   try {
     const { id_poligono, latitud, longitud } = req.body;
+
     const operacion = req.method;
     const id_usuarioAuditoria = req.headers['id_usuario'];
 
-    const consulta = `
-      WITH validaciones AS (
-        SELECT
-          NOT EXISTS (SELECT 1 FROM puntos WHERE id_poligono = $1 AND latitud = $2 AND longitud = $3) AS puntoNoExiste,
-          EXISTS (SELECT 1 FROM poligonos WHERE id_poligono = $1) AS existePoligono
-      ),
-      insercion AS (
-        INSERT INTO puntos (id_poligono, latitud, longitud)
-        SELECT $1, $2, $3
-        FROM validaciones
-        WHERE puntoNoExiste = true AND existePoligono = true
-        RETURNING *
-      )
-      SELECT * FROM insercion;
-    `;
+    //Validaciones para validar que un punto no tenga la misma latitud y longitud 
+    const existenciasPuntos = await pool.query("SELECT id_punto FROM puntos WHERE id_poligono = $1 AND latitud = $2 AND longitud = $3",
+      [id_poligono, latitud, longitud]);
 
-    const result = await pool.query(consulta, [id_poligono, latitud, longitud]);
-
-    if (result.rows.length === 0) {
-      return res.status(400).send({ error: 'No se pudo crear el punto debido a las validaciones' });
+    if (existenciasPuntos.rows.length > 0) {
+      return res.status(400).send({ error: "Ya existe este punto en el polígono" });
     }
+
+    const existePoligono = await pool.query("SELECT id_poligono FROM poligonos WHERE id_poligono = $1", [id_poligono]);
+    if (existePoligono.rowCount === 0) {
+      return res.status(404).json({ error: 'Polígono no encontrado' });
+    }
+
+    await pool.query("INSERT INTO puntos (id_poligono,latitud,longitud) VALUES($1,$2,$3) RETURNING *",
+      [id_poligono, latitud, longitud]);
 
     auditar(operacion, id_usuarioAuditoria);
 
-    res.status(200).json({ mensaje: 'Punto creado exitosamente' });
+    return res.status(200).json({ mensaje: 'Punto creado exitosamente' });
+
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ error: 'Error al crear el punto' });
   }
 });
+
 //update
 routerPuntos.put('/:id_punto', validaPuntos, async (req, res) => {
   try {
     const { id_punto } = req.params;
     const { id_poligono, latitud, longitud } = req.body;
+
     const operacion = req.method;
     const id_usuarioAuditoria = req.headers['id_usuario'];
 
-    const consulta = `
-      WITH validaciones AS (
-        SELECT
-          p.id_punto,
-          EXISTS (SELECT 1 FROM poligonos WHERE id_poligono = $1) AS existePoligono
-        FROM puntos p
-        WHERE p.id_punto = $2
-      ),
-      modificacion AS (
-        UPDATE puntos p
-        SET id_poligono = $1, latitud = $2, longitud = $3
-        FROM validaciones v
-        WHERE p.id_punto = v.id_punto AND v.existePoligono
-        RETURNING p.*
-      )
-      SELECT * FROM modificacion;
-    `;
+    // Validaciones para validar existencia del punto
+    const buscarIdPunto = await pool.query("SELECT id_punto FROM puntos WHERE id_punto = $1", [id_punto]);
 
-    const result = await pool.query(consulta, [id_poligono, id_punto, latitud, longitud]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No se pudo modificar el punto debido a las validaciones' });
+    if (buscarIdPunto.rowCount === 0) {
+      return res.status(404).json({ error: 'Punto no encontrado' });
     }
+
+    // Validaciones para validar existencia del poligono
+    const buscarIdPoligono = await pool.query("SELECT id_poligono FROM poligonos WHERE id_poligono = $1", [id_poligono]);
+
+    if (buscarIdPoligono.rowCount === 0) {
+      return res.status(404).json({ error: 'Polígono no encontrado' });
+    }
+
+    const modificarPunto = await pool.query('UPDATE "puntos" SET id_poligono = $1, latitud = $2, longitud = $3 WHERE id_punto = $4', [id_poligono, latitud, longitud, id_punto]);
 
     auditar(operacion, id_usuarioAuditoria);
 
     res.status(200).json({ mensaje: 'Punto modificado exitosamente' });
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'Error al modificar el punto' });
+    console.error(err.message)
   }
-});
+})
 
 
 //delete
